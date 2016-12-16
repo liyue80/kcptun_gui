@@ -1,0 +1,9 @@
+e:\kcptun_gui\util\bin\Release\util.exe.config
+e:\kcptun_gui\util\bin\Release\util.exe
+e:\kcptun_gui\util\bin\Release\util.pdb
+e:\kcptun_gui\util\obj\Release\util.Form1.resources
+e:\kcptun_gui\util\obj\Release\util.Properties.Resources.resources
+e:\kcptun_gui\util\obj\Release\util.csproj.GenerateResource.Cache
+e:\kcptun_gui\util\obj\Release\util.exe
+e:\kcptun_gui\util\obj\Release\util.pdb
+E:\kcptun_gui\util\obj\Release\util.csprojResolveAssemblyReference.cache

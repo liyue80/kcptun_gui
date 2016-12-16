@@ -1,0 +1,8 @@
+e:\kcptun_gui\util\bin\Debug\util.exe.config
+e:\kcptun_gui\util\bin\Debug\util.exe
+e:\kcptun_gui\util\bin\Debug\util.pdb
+e:\kcptun_gui\util\obj\Debug\util.Form1.resources
+e:\kcptun_gui\util\obj\Debug\util.Properties.Resources.resources
+e:\kcptun_gui\util\obj\Debug\util.csproj.GenerateResource.Cache
+e:\kcptun_gui\util\obj\Debug\util.exe
+e:\kcptun_gui\util\obj\Debug\util.pdb

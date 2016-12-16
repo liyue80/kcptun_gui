@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<KcptunClientConfig xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ServerAddress>104.224.158.66</ServerAddress>
+  <ServerPort>10087</ServerPort>
+  <LocalPort>10087</LocalPort>
+  <Key>ptc123456</Key>
+  <ExecutableFile>E:\kcptun_gui\util\bin\Debug\client_windows_amd64.exe</ExecutableFile>
+</KcptunClientConfig>
