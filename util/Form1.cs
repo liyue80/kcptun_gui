@@ -1,28 +1,31 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Data;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
-using System.Linq;
-using System.Text;
+using System.Net.NetworkInformation;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace util
 {
     public partial class Form1 : Form
     {
-        private bool IsShadowsocksRunning
-        {
-            get { return (Process.GetProcessesByName("Shadowsocks").Length > 0); }
-        }
-
         private bool IsKcptunClientRunning
         {
-            get { return (Process.GetProcessesByName("client_windows_amd64").Length > 0); }
+            get
+            {
+                return (Process.GetProcessesByName("client_windows_amd64").Length > 0)
+                    || (Process.GetProcessesByName("client_windows_386").Length > 0);
+            }
+        }
+
+        private string KcptunProgramName32_64
+        {
+            get
+            {
+                return System.Environment.Is64BitOperatingSystem ? "client_windows_amd64.exe"
+                    : "client_windows_386.exe";
+            }
         }
 
         public Form1()
@@ -36,89 +39,121 @@ namespace util
             config = KcptunClientConfig.LoadFromFile(KcptunClientConfig.DefaultFileName);
             if (config != null)
             {
+                this.textboxProgram.Text = config.ExecutableFile;
                 this.textboxServer.Text = config.ServerAddress;
                 this.textboxRemotePort.Text = config.ServerPort;
                 this.textboxLocalPort.Text = config.LocalPort;
                 this.textboxKey.Text = config.Key;
             }
             this.toolStripProgressBar1.Visible = false;
-            UpdateStatusBar();
+            this.RefreshGuiTextStatus();
             this.monitorTimer.Interval = 3 * 1000;
             this.monitorTimer.Start();
+
+            if (!File.Exists(this.textboxProgram.Text))
+            {
+                this.PopupDownloadKcptunDialog();
+            }
+
+            UpdateTextBoxCommandArguments(null, null);
+            this.textboxServer.TextChanged += UpdateTextBoxCommandArguments;
+            this.textboxRemotePort.TextChanged += UpdateTextBoxCommandArguments;
+            this.textboxLocalPort.TextChanged += UpdateTextBoxCommandArguments;
+            this.textboxKey.TextChanged += UpdateTextBoxCommandArguments;
         }
 
-        private void UpdateStatusBar()
+        private void PopupDownloadKcptunDialog()
+        {
+            DialogResult dialogResult = MessageBox.Show(
+                        "Cannot found Kcptun client in current directory.\n\n"
+                        + "[Yes] Open web page to download a new kcptun client.\n"
+                        + "[No] Choose the kcptun client on local disk.\n"
+                        + "[Cancel] Do nothing.",
+                        "Choice", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+
+            if (System.Windows.Forms.DialogResult.Yes == dialogResult)
+            {
+                System.Diagnostics.Process.Start("https://github.com/xtaci/kcptun/releases/latest");
+            }
+            else if (System.Windows.Forms.DialogResult.No == dialogResult)
+            {
+                this.ShowFileDialog();
+            }
+            else
+            {
+            }
+        }
+
+        private void RefreshGuiTextStatus()
         {
             lock (this)
             {
-                toolStripStatusLabel1.Text = this.IsShadowsocksRunning ? "Shadowsocks: RUNNING" : "Shadowsocks: STOPPED";
-                toolStripStatusLabel2.Text = this.IsKcptunClientRunning ? "Kcptun: RUNNING" : "Kcptun: STOPPED";
-            }
-        }
-
-        private void startShadowsocks_Click(object sender, EventArgs e)
-        {
-            if (!this.IsShadowsocksRunning)
-            {
-                ProcessStartInfo start = new ProcessStartInfo();
-                start.FileName = Path.Combine(Directory.GetCurrentDirectory(), "Shadowsocks.exe");
-                start.WindowStyle = ProcessWindowStyle.Minimized;
-                try
+                if (this.IsKcptunClientRunning)
                 {
-                    using (Process proc = Process.Start(start)) { };
-                    this.UpdateStatusBar();
+                    this.toolStripStatusLabel2.Text = "Running";
+                    this.buttonSwitcher.Text = "Stop";
+                    this.textboxServer.Enabled = false;
+                    this.textboxLocalPort.Enabled = false;
+                    this.textboxRemotePort.Enabled = false;
+                    this.textboxKey.Enabled = false;
+                    this.buttonRandomLocalPort.Enabled = false;
+                    this.checkboxDebug.Enabled = false;
+                    this.checkBoxDebugWriteFile.Enabled = false;
                 }
-                catch (Win32Exception ex)
+                else
                 {
-                    MessageBox.Show(ex.Message, null, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-        }
-
-        private void stopShadowsocks_Click(object sender, EventArgs e)
-        {
-            if (this.IsShadowsocksRunning)
-            {
-                using (Form1.Progress progress = new Form1.Progress(this))
-                {
-                    int loops = 20;
-                    progress.Value = progress.Minimum;
-                    int step = (progress.Maximum - progress.Minimum) / loops;
-
-                    this.KillProcessByName("Shadowsocks");
-
-                    for (int i = 0; i < loops; i++)
-                    {
-                        progress.Value += step;
-                        Thread.Sleep(3000 / loops);
-                    }
-                    SystemTray.RefreshTrayArea();
-                    this.UpdateStatusBar();
+                    this.toolStripStatusLabel2.Text = "Stopped";
+                    this.buttonSwitcher.Text = "Save && Start";
+                    this.textboxServer.Enabled = true;
+                    this.textboxLocalPort.Enabled = true;
+                    this.textboxRemotePort.Enabled = true;
+                    this.textboxKey.Enabled = true;
+                    this.buttonRandomLocalPort.Enabled = true;
+                    this.checkboxDebug.Enabled = true;
+                    this.checkBoxDebugWriteFile.Enabled = true;
                 }
             }
         }
 
         private void monitorTimer_Tick(object sender, EventArgs e)
         {
-            this.UpdateStatusBar();
+            this.RefreshGuiTextStatus();
         }
 
-        private void startKcptunClient_Click(object sender, EventArgs e)
+        private void StartKcptunClient()
         {
+            if (!this.CheckLocalPort(false))
+            {
+                return;
+            }
+
+            if (!File.Exists(this.textboxProgram.Text))
+            {
+                MessageBox.Show("Invalid KCPTUN client file.");
+                return;
+            }
+
             KcptunClientConfig config = this.SaveConfiguration();
 
             if (!this.IsKcptunClientRunning)
             {
                 ProcessStartInfo start = new ProcessStartInfo();
-                start.FileName = Path.Combine(Directory.GetCurrentDirectory(), "client_windows_amd64.exe");
-                start.WindowStyle = checkboxDebug.Checked ? ProcessWindowStyle.Normal : ProcessWindowStyle.Hidden;
-                start.Arguments = string.Format("-l :{0} -r {1}:{2} --key {3}",
-                    config.LocalPort, config.ServerAddress, config.ServerPort, config.Key);
+                start.FileName = this.textboxProgram.Text;
+                start.UseShellExecute = true;
+                start.CreateNoWindow = true;
+                start.WindowStyle = ProcessWindowStyle.Hidden;
+                start.WorkingDirectory = Path.GetDirectoryName(start.FileName);
+                if (this.checkboxDebug.Checked && !this.checkBoxDebugWriteFile.Checked)
+                {
+                    start.WindowStyle = ProcessWindowStyle.Normal;
+                }
+                start.Arguments = this.GenerateKcptunCommandArguments(config);
 
                 try
                 {
                     using (Process proc = Process.Start(start)) { };
-                    this.UpdateStatusBar();
+                    this.UpdateTextBoxCommandArguments(null, null);
+                    this.RefreshGuiTextStatus();
                     checkboxDebug.Enabled = false;
                 }
                 catch (Win32Exception ex)
@@ -131,6 +166,7 @@ namespace util
         private KcptunClientConfig SaveConfiguration()
         {
             KcptunClientConfig config = new KcptunClientConfig();
+            config.ExecutableFile = textboxProgram.Text;
             config.ServerAddress = textboxServer.Text;
             config.ServerPort = textboxRemotePort.Text;
             config.LocalPort = textboxLocalPort.Text;
@@ -164,7 +200,7 @@ namespace util
 
         private void checkboxDebug_CheckedChanged(object sender, EventArgs e)
         {
-
+            this.checkBoxDebugWriteFile.Enabled = this.checkboxDebug.Checked;
         }
 
         private void KillProcessByName(string name)
@@ -175,7 +211,7 @@ namespace util
             }
         }
 
-        private void stopKcptunClient_Click(object sender, EventArgs e)
+        private void StopKcptunClient()
         {
             if (this.IsKcptunClientRunning)
             {
@@ -186,13 +222,14 @@ namespace util
                     int step = (progress.Maximum - progress.Minimum) / loops;
 
                     this.KillProcessByName("client_windows_amd64");
+                    this.KillProcessByName("client_windows_386");
 
                     for (int i = 0; i < loops; i++)
                     {
                         progress.Value += step;
                         Thread.Sleep(3000 / loops);
                     }
-                    this.UpdateStatusBar();
+                    this.RefreshGuiTextStatus();
                 }
             }
         }
@@ -234,6 +271,158 @@ namespace util
             {
                 form.toolStripProgressBar1.Visible = false;
                 form.Enabled = true;
+            }
+        }
+
+        private void CheckLocalPortButton_Click(object sender, EventArgs e)
+        {
+            this.CheckLocalPort(true);
+        }
+
+        private bool CheckLocalPort(bool showMessageOnSuccess)
+        {
+            bool valid = true;
+            int port = int.Parse(textboxLocalPort.Text);
+
+            if (port <= 1024 || port > 655535)
+            {
+                valid = (MessageBox.Show("Port number is out of range. (1025~65535)\n\nDo you want to use it?",
+                    null, MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == System.Windows.Forms.DialogResult.Yes);
+            }
+
+            if (valid)
+            {
+                valid = this.TestPortInUse(port);
+                if (valid)
+                {
+                    if (showMessageOnSuccess)
+                    {
+                        MessageBox.Show(
+                            string.Format("Port {0} is valid.", textboxLocalPort.Text),
+                            null, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show(
+                        string.Format("Port {0} is in use.", textboxLocalPort.Text),
+                        null, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+
+            return valid;
+        }
+
+        private bool TestPortInUse(int port)
+        {
+            // Evaluate current system tcp connections. This is the same information provided
+            // by the netstat command line application, just in .Net strongly-typed object
+            // form.  We will look through the list, and if our port we would like to use
+            // in our TcpClient is occupied, we will set isAvailable to false.
+            IPGlobalProperties ipGlobalProperties = IPGlobalProperties.GetIPGlobalProperties();
+            TcpConnectionInformation[] tcpConnInfoArray = ipGlobalProperties.GetActiveTcpConnections();
+
+            foreach (TcpConnectionInformation tcpi in tcpConnInfoArray)
+            {
+                if (tcpi.LocalEndPoint.Port == port)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void buttonRandomLocalPort_Click(object sender, EventArgs e)
+        {
+            Random rand = new Random((int)DateTime.Now.ToBinary());
+            int port;
+
+            do
+            {
+                port = rand.Next(30000 - 2000) + 2000;
+            } while (!this.TestPortInUse(port));
+
+            this.textboxLocalPort.Text = port.ToString();
+        }
+
+        private void UpdateTextBoxCommandArguments(object sender, EventArgs e)
+        {
+            string command = this.textboxProgram.Text;
+            string arguments = this.GenerateKcptunCommandArguments(null);
+            this.textBoxCommand.Text = string.Format("{0} {1}", command, arguments);
+        }
+
+        private string GenerateKcptunCommandArguments(KcptunClientConfig config)
+        {
+            string arguments = "";
+
+            if (config == null)
+            {
+                if (this.textboxLocalPort.Text.Length > 0)
+                {
+                    arguments += string.Format(" -l :{0}", this.textboxLocalPort.Text);
+                }
+
+                if (this.textboxServer.Text.Length > 0)
+                {
+                    if (this.textboxRemotePort.Text.Length > 0)
+                    {
+                        arguments += string.Format(" -r {0}:{1}",
+                            this.textboxServer.Text, this.textboxRemotePort.Text);
+                    }
+                    else
+                    {
+                        arguments += string.Format(" -r {0}:0", this.textboxServer.Text);
+                    }
+                }
+
+                if (this.textboxKey.Text.Length > 0)
+                {
+                    arguments += string.Format(" --key {0}", this.textboxKey.Text);
+                }
+            }
+            else
+            {
+                arguments = string.Format("-l :{0} -r {1}:{2} --key {3}",
+                        config.LocalPort, config.ServerAddress, config.ServerPort, config.Key);
+            }
+
+            if (this.checkboxDebug.Checked && this.checkBoxDebugWriteFile.Checked)
+                arguments += string.Format(" --log kcptun.log");
+
+            return arguments.TrimStart();
+        }
+
+        private void buttonBrowse_Click(object sender, EventArgs e)
+        {
+            this.ShowFileDialog();
+        }
+
+        private void ShowFileDialog()
+        {
+            OpenFileDialog dialog = new OpenFileDialog();
+            dialog.Filter = "Kcptun|client_windows_386.exe|Kcptun|client_windows_amd64.exe";
+            dialog.FilterIndex = System.Environment.Is64BitOperatingSystem ? 2 : 1;
+            dialog.CheckFileExists = true;
+            dialog.InitialDirectory = Directory.GetCurrentDirectory();
+            DialogResult dialogResult = dialog.ShowDialog();
+
+            if (System.Windows.Forms.DialogResult.OK == dialogResult)
+            {
+                this.textboxProgram.Text = dialog.FileName;
+            }
+        }
+
+        private void buttonSwitcher_Click(object sender, EventArgs e)
+        {
+            if (this.IsKcptunClientRunning)
+            {
+                this.StopKcptunClient();
+            }
+            else
+            {
+                this.StartKcptunClient();
             }
         }
     }

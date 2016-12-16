@@ -18,6 +18,8 @@ namespace util
 
         public string Key { get; set; }
 
+        public string ExecutableFile { get; set; }
+
         public void Save(string fileName)
         {
             using (FileStream file = File.Create(fileName))
